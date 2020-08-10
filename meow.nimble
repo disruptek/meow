@@ -6,6 +6,7 @@ description   = "meowhash wrapper for Nim"
 license       = "MIT"
 
 bin = @["meow"]
+installFiles = @["meow.nim"]
 
 # Dependencies
 
