@@ -25,12 +25,24 @@ static:
   ]))
 
 cOverride:
-  type m128i* {.importc: "__m128i", header: "emmintrin.h".} = object
+  type m128i {.importc: "__m128i", header: "emmintrin.h".} = object
 
 cPassC("-O3 -mavx -maes")
 cImport(header, flags = "-E__,_ -c")
 
-proc MeowFile*(path: string): m128i =
+type
+  Meow* = m128i  ## meow hash operations use this type
+
+proc meowHash*(x: cstring | string): Meow =
+  result = MeowHash(addr MeowDefaultSeed, len(x).culonglong, x)
+
+proc meowHash*(x: string): Meow =
+  result = meowHash(x.cstring)
+
+proc meowHash*[T](x: T): Meow =
+  result = MeowHash(addr MeowDefaultSeed, sizeof(x).culonglong, x)
+
+proc meowFile*(path: string): Meow =
   ## Create hash without loading entire file in memory like `MeowHash()`
   var
     state: meow_state
@@ -52,34 +64,34 @@ proc MeowFile*(path: string): m128i =
 
   f.close()
 
-proc MeowHashesAreEqual*(A, B: m128i): bool =
+proc `==`*(a, b: Meow): bool =
   ## Compare two hashes for equality
   ({.emit: [
-    result, " = MeowHashesAreEqual(", A, ", ", B, ");"
+    result, " = MeowHashesAreEqual(", a, ", ", b, ");"
   ].})
 
-proc MeowHashToArray*(A: m128i): seq[uint32] =
+converter toArray*(h: Meow): seq[uint32] =
   ## Split 128-bit hash into 4 uint32 values
   var s: uint32
-  ({.emit: [s, " = MeowU32From(", A, ", 0);"].})
+  ({.emit: [s, " = MeowU32From(", h, ", 0);"].})
   result.add s
-  ({.emit: [s, " = MeowU32From(", A, ", 1);"].})
+  ({.emit: [s, " = MeowU32From(", h, ", 1);"].})
   result.add s
-  ({.emit: [s, " = MeowU32From(", A, ", 2);"].})
+  ({.emit: [s, " = MeowU32From(", h, ", 2);"].})
   result.add s
-  ({.emit: [s, " = MeowU32From(", A, ", 3);"].})
+  ({.emit: [s, " = MeowU32From(", h, ", 3);"].})
   result.add s
 
-proc `$`*(A: m128i): string =
+proc `$`*(h: Meow): string =
   ## Convert hash into a string
-  let arr = A.MeowHashToArray()
-  for i in countdown(arr.high, 0):
+  let arr: seq[uint32] = h
+  for i in countDown(arr.high, arr.low):
     result &= toHex(arr[i])
 
-proc hash*(x: m128i): Hash =
+proc hash*(x: Meow): Hash =
   ## Computes a Hash from `x` for table use
   var h: Hash = 0
-  for i in x.MeowHashToArray():
+  for i in items(x.toArray):
     h = h !& i.int
   result = !$h
 
@@ -89,8 +101,8 @@ when isMainModule:
     params = commandLineParams()
   case params.len
   of 1:
-    echo MeowFile(params[0])
+    echo meowFile(params[0])
   of 2:
-    echo MeowHashesAreEqual(MeowFile(params[0]), MeowFile(params[1]))
+    echo meowFile(params[0]) == meowFile(params[1])
   else:
     echo "meow file1 [file2]"

@@ -1,3 +1,4 @@
 build
 meow
-tests/*
+deps
+nim.cfg
